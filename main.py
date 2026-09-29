@@ -19,6 +19,7 @@ def main():
     
     # Clean up old output files to prevent reading stale data
     output_dir = os.path.join("data", "output")
+    os.makedirs(output_dir, exist_ok=True)
     for old_file in ["full_protein_graph.json", "validation_report.json", "protein_3d_graph.html"]:
         old_path = os.path.join(output_dir, old_file)
         if os.path.exists(old_path):
@@ -75,7 +76,7 @@ Summary: {encoded_graph}
         f.write(exploration_text)
     
     print(exploration_text)
-    print(f"    Node Feature Tensor (X) Shape: {getattr(encoded_graph, 'x').shape} (34 dimensions!)")
+    print(f"    Node Feature Tensor (X) Shape: {getattr(encoded_graph, 'x').shape} (31 dimensions!)")
     print(f"    Coordinate Tensor (pos) Shape: {getattr(encoded_graph, 'pos').shape}")
     print(f"    Edge Index Shape: {getattr(encoded_graph, 'edge_index').shape}")
     print(f"    Edge Features Shape: {getattr(encoded_graph, 'edge_attr').shape}")

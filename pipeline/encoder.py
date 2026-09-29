@@ -84,7 +84,11 @@ class FeatureEncoder:
         # Edges Construction
         coords = pos.numpy()
         if num_nodes == 0:
-            return {'x': x, 'pos': pos, 'edge_index': torch.empty((2, 0)), 'edge_attr': torch.empty((0, 16))}
+            try:
+                from torch_geometric.data import Data
+            except ImportError:
+                Data = MockData
+            return Data(x=x, pos=pos, cb_vec=cb_vec, edge_index=torch.empty((2, 0), dtype=torch.long), edge_attr=torch.empty((0, 32), dtype=torch.float32), node_metadata=[], edge_types=[], raw_edges=[])
             
         nbrs = NearestNeighbors(n_neighbors=min(self.k_neighbors, num_nodes), algorithm='ball_tree').fit(coords)
         distances, indices = nbrs.kneighbors(coords)
@@ -147,19 +151,22 @@ class FeatureEncoder:
                     
         edge_index = torch.tensor([src_nodes, dst_nodes], dtype=torch.long)
         
-        # Encode continuous/categorical features
-        rbf_features = self._rbf(torch.tensor(edge_dists, dtype=torch.float32))
-        
-        seq_seps_shifted = torch.tensor(seq_seps, dtype=torch.long) + 5
-        seq_sep_onehot = torch.nn.functional.one_hot(seq_seps_shifted, num_classes=11).float()
-        
-        same_chain_tensor = torch.tensor(same_chain_flags, dtype=torch.float32)
-        salt_bridge_tensor = torch.tensor(salt_bridges, dtype=torch.float32)
-        dir_vec_tensor = torch.tensor(np.array(direction_vectors), dtype=torch.float32)
-        
-        # Combine all scalar and vector edge features (16 + 11 + 1 + 1 + 3 = 32 dims)
-        # Note: same_chain_tensor replaces pep_bond_tensor
-        edge_attr = torch.cat([rbf_features, seq_sep_onehot, same_chain_tensor, salt_bridge_tensor, dir_vec_tensor], dim=1)
+        if len(src_nodes) == 0:
+            edge_attr = torch.empty((0, 32), dtype=torch.float32)
+        else:
+            # Encode continuous/categorical features
+            rbf_features = self._rbf(torch.tensor(edge_dists, dtype=torch.float32))
+            
+            seq_seps_shifted = torch.tensor(seq_seps, dtype=torch.long) + 5
+            seq_sep_onehot = torch.nn.functional.one_hot(seq_seps_shifted, num_classes=11).float()
+            
+            same_chain_tensor = torch.tensor(same_chain_flags, dtype=torch.float32)
+            salt_bridge_tensor = torch.tensor(salt_bridges, dtype=torch.float32)
+            dir_vec_tensor = torch.tensor(np.array(direction_vectors), dtype=torch.float32)
+            
+            # Combine all scalar and vector edge features (16 + 11 + 1 + 1 + 3 = 32 dims)
+            # Note: same_chain_tensor replaces pep_bond_tensor
+            edge_attr = torch.cat([rbf_features, seq_sep_onehot, same_chain_tensor, salt_bridge_tensor, dir_vec_tensor], dim=1)
         
         # 5. Export Human-Readable Edges for JSON
         raw_edges = []

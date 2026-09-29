@@ -33,7 +33,6 @@ class FeatureEncoder:
         num_nodes = len(residues_data)
         
         # Initialize Node Feature Tensors
-        # Initialize Node Feature Tensors
         # One-hot(21) + Phys(3) + HBonds(2) + Angles(4) + B-factor(1) = 31 dimensions
         x = torch.zeros((num_nodes, 31), dtype=torch.float32)
         pos = torch.zeros((num_nodes, 3), dtype=torch.float32)

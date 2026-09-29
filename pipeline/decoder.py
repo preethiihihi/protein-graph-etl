@@ -8,7 +8,6 @@ AMINO_ACIDS = [
 IDX_TO_AA = {i: aa for i, aa in enumerate(AMINO_ACIDS)}
 UNKNOWN_AA = 'UNK'
 
-IDX_TO_SS = {0: 'HELIX', 1: 'SHEET', 2: 'COIL'}
 
 class FeatureDecoder:
     def __init__(self):

@@ -1,76 +1,58 @@
-# Feature Engineering for Structure-Based Generative Learning
+# 🧬 Structure-Based Generative Learning: Feature Pipeline
 
-## Overview
-This project implements a custom feature extraction and encoding-decoding pipeline for protein structures (PDB). We designed a **Residue-Level, Graph-Based Representation** of the protein and encoded it into structured numerical **PyTorch Tensors**. This format is specifically designed to serve as input to structure-based generative deep learning models.
+A rigorous biocomputing pipeline designed to extract, transform, and encode raw Protein Data Bank (PDB) structures into **residue-level, graph-based PyTorch Tensors**—the exact machine-readable format required for structure-based generative deep learning models (SBDD).
 
-## 1. Feature Choices & Justification
-The pipeline utilizes a **Residue-Level (Coarse-Grained) Graph Representation**, which significantly reduces computational overhead compared to all-atom representations while preserving the true topological fold. The extracted features are strictly categorized to support robust generative modeling:
+---
 
-* **Biological Information:** 
-  * *Features:* Amino acid identity (One-Hot Encoded), Chain IDs, and Sequence separation indices.
-  * *Justification:* Provides the evolutionary and primary sequence context required for the model to understand the basic building blocks and polymer topology.
-* **Chemical Information (Physicochemical):**
-  * *Features:* Hydropathy, Charge, Volume, and Pharmacophore properties (H-Donors/Acceptors).
-  * *Justification:* These are the primary driving forces behind protein folding and binding affinity. Feeding these explicitly allows generative models to condition on local chemistry, not just geometry.
-* **Structural Information:**
-  * *Features:* Alpha-Carbon (Cα) nodes and B-factors.
-  * *Justification:* Cα nodes define the structural backbone trace. B-factors provide the model with a measure of local structural flexibility and experimental uncertainty.
-* **Geometric Information:**
-  * *Features:* 3D Coordinates (X,Y,Z), Phi/Psi dihedral angles, and side-chain orientation (CB) vectors.
-  * *Justification:* Sine/Cosine encoded dihedral angles and CB vectors give the model perfect spatial orientation of how the backbone twists and where the side-chain is pointing.
-* **Relationship Information (Graph Edges):**
-  * *Features:* K-Nearest Neighbors (KNN) spatial edges (≤ 8.0 Å) with RBF-encoded distances and 3D directional unit vectors.
-  * *Justification:* In generative drug discovery, non-sequential tertiary contacts define active sites. Explicitly filtering out sequential backbone bonds forces the model to learn long-range physical interactions rather than memorizing the 1D sequence.
+## 🚀 Quick Start & How to Use
 
-## 2. Pipeline Data Flow (Inputs & Outputs)
-To ensure strict modularity, the pipeline is divided into distinct ETL stages where each script has a rigorously defined input and output:
+1. **Set up a Python Virtual Environment (Recommended):**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows use: venv\Scripts\activate
+   ```
+2. **Install the required biophysics and ML libraries:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. **Run the full pipeline on the default sample:**
+   ```bash
+   python3 main.py
+   ```
+3. **Run on your own specific PDB file:**
+   Simply place your `.pdb` file inside the `data/input/` folder and pass it as an argument:
+   ```bash
+   python3 main.py your_custom_protein.pdb
+   ```
 
-1. **Extractor (`pipeline/extractor.py`)**
-   * **Input:** Raw `.pdb` structure file (e.g., `4hhb.pdb`).
-   * **Output:** A list of Python dictionaries, where each dictionary holds the human-readable physical and chemical properties of a single amino acid.
-2. **Encoder (`pipeline/encoder.py`)**
-   * **Input:** The list of dictionaries from the extractor.
-   * **Output:** Four standardized PyTorch Tensors ready for graph neural networks: Node features (`x`), coordinates (`pos`), connectivity (`edge_index`), and edge features (`edge_attr`).
-3. **Decoder (`pipeline/decoder.py`)**
-   * **Input:** The encoded PyTorch Tensors.
-   * **Output:** A reconstructed list of dictionaries mapping the tensors back to human-readable biological data.
-4. **Validator (`pipeline/validator.py`)**
-   * **Input:** The original dictionary (from step 1) and the reconstructed dictionary (from step 3).
-   * **Output:** A generated `validation_report.json` containing the structural RMSD error and Sequence Recovery Percentage.
+**Where are the results?**
+All generated data will instantly appear in the **`data/output/`** folder! This includes:
+* `protein_graph.pt`: The pure PyTorch Geometric tensor object.
+* `full_protein_graph.json`: A human-readable export of the graph.
+* `validation_report.json`: Proof of structural integrity (RMSD metrics).
+* `protein_3d_graph.html`: An interactive 3D visualization you can open in your browser!
 
-## 3. Encoding and Decoding Logic
-### Encoder Logic (`pipeline/encoder.py`)
-The encoder is mathematically deterministic. It converts biological data into numerical tensors using the following logic:
-* **Node Identity Encoding:** Amino acid types (e.g., "ALA") are mapped to a 21-dimensional **One-Hot Encoded vector** (20 standard amino acids + 1 'Unknown' token).
-* **Continuous Feature Normalization:** Physicochemical properties (hydropathy, volume) are passed through as continuous float values.
-* **Angular Encoding (Trigonometry):** To solve the boundary discontinuity problem of dihedral angles (where -180° and +180° are physically identical but mathematically distant), Phi and Psi angles are encoded as their `Sine` and `Cosine` components.
-* **Edge Distance Encoding (RBF):** Instead of passing a single scalar distance (e.g., 5.2 Å), distances are expanded into a **16-dimensional Radial Basis Function (RBF)**. This smears the distance across 16 Gaussian bins, which allows a neural network to easily learn non-linear distance thresholds (e.g., recognizing strong vs. weak hydrogen bonds).
-* **Directional Vectors:** The relative 3D unit vector `(x,y,z)` pointing from the source node to the target node is calculated to provide equivariant neural networks with spatial orientation.
+---
 
-### Decoder Logic (`pipeline/decoder.py`)
-The decoder acts as a mathematical reverse-engineer to prove that no critical biological data was lost during tensor transformation.
-* **Identity Decoding:** Applies `torch.argmax()` to the 21-dimensional one-hot array to retrieve the exact amino acid string (e.g., `[1, 0, 0...] -> 'ALA'`).
-* **Angular Decoding:** Reconstructs the exact dihedral angles using the arctangent function: `np.arctan2(sin, cos)`.
-* **Topology Reconstruction:** Decodes the `edge_index` tensor back into a source-target node list. It also dynamically recalculates sequential peptide bonds by checking if two nodes share the same Chain ID and have adjacent residue sequence numbers (`abs(res_i - res_j) == 1`).
+## Brief Repository Structure
 
-## 4. Assumptions and Design Trade-offs
-* **Trade-off (Coarse vs. All-Atom):** By using Cα representation, we assume side-chain positions can be inferred or reconstructed post-generation (e.g., via Rosetta or FastRelax). This trades atomic precision for massive ML training speedups.
-* **Assumption (Missing Atoms):** The pipeline assumes residues missing Cα atoms are artifacts (e.g., poor experimental density) and skips them to maintain graph continuity.
-* **Trade-off (Secondary Structure):** Explicit secondary structure classification was dropped in favor of raw Phi/Psi angles, assuming a powerful generative model will natively learn secondary structure representations from the angles and hydrogen bond potentials.
+* **`data/input/`** - Drop your raw `.pdb` structure files here.
+* **`data/output/`** - Contains all generated AI tensors, JSON graphs, validation reports, and 3D HTML visualizations.
+* **`pipeline/extractor.py`** - Parses physical, geometric, and chemical features from the PDB.
+* **`pipeline/encoder.py`** - Converts the biological features into a mathematical K-NN graph of PyTorch Geometric tensors.
+* **`pipeline/decoder.py`** - Reverse-engineers the tensors back into readable biology.
+* **`pipeline/validator.py`** - Scores the pipeline's fidelity (Structural RMSD & Sequence Recovery).
+* **`main.py`** - The core execution script that ties the entire ETL pipeline together.
 
-## 5. Scalability to Large Protein Datasets (Optional Bonus)
-While the current pipeline exports human-readable JSON files for debugging and visualization, this is not scalable for training on millions of proteins (e.g., the PDB or AlphaFold DB).
-To scale this pipeline:
-1. **PyTorch DataLoaders:** The JSON export would be bypassed, directly yielding `torch_geometric.data.Data` objects.
-2. **HDF5 / LMDB Storage:** Processed tensors would be chunked into Lightning Memory-Mapped Databases (LMDB) or HDF5 files to allow lightning-fast, parallelized GPU batching without the disk I/O bottleneck of parsing text files.
-3. **Parallel Processing:** The `extractor.py` logic can be trivially wrapped in Python's `multiprocessing` pool, mapping the parser across thousands of `.pdb` files concurrently.
+---
 
-## 6. Usage
-```bash
-# Run the core ETL pipeline on the default PDB (7rfw.pdb)
-# This will automatically generate the JSON, the Validation Report, AND the HTML Visualization in data/output/
-python3 main.py
+## Logic Overview
 
-# Or specify any PDB file located in the data/input/ directory
-python3 main.py 1crn.pdb
-```
+This pipeline acts as the essential "translator" between raw biology and an Artificial Intelligence model. 
+
+1. **Extraction (Biology → Data):** It parses the protein and extracts coordinates, angles, and physicochemical traits at the **residue-level (Cα)**. This trades all-atom precision for massive computational speedups during ML training.
+2. **Graph Construction (Nodes & Edges):** Amino acids become graph nodes (embedded with 31-dimensional chemical and geometric features). Spatial neighbors (≤ 8.0 Å) become graph edges. *Crucially, sequential peptide bonds are deliberately dropped to force the generative AI to learn long-range 3D folding rules rather than just memorizing a 1D sequence.*
+3. **Encoding (Data → Tensors):** Distances are expanded using 16-bin Radial Basis Functions (RBFs), angles are trigonometrically encoded (Sine/Cosine to prevent boundary errors), and categorical traits are One-Hot encoded. Everything is packaged into a strict PyTorch Geometric `Data` object.
+4. **Validation (Decoding):** The tensors are decoded back into a physical structure to calculate the mathematical RMSD, proving that absolutely zero structural data was lost during the AI embedding process.
+
+*(For an extremely deep dive into the biophysics, tensor dimensionalities, and scalability trade-offs, please refer to the detailed `PDB_Pipeline_Documentation.md` file provided alongside this repository!)*

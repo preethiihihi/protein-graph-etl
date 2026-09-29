@@ -54,5 +54,3 @@ This pipeline acts as the essential "translator" between raw biology and an Arti
 2. **Graph Construction (Nodes & Edges):** Amino acids become graph nodes (embedded with 31-dimensional chemical and geometric features). Spatial neighbors (≤ 8.0 Å) become graph edges. *Crucially, sequential peptide bonds are deliberately dropped to force the generative AI to learn long-range 3D folding rules rather than just memorizing a 1D sequence.*
 3. **Encoding (Data → Tensors):** Distances are expanded using 16-bin Radial Basis Functions (RBFs), angles are trigonometrically encoded (Sine/Cosine to prevent boundary errors), and categorical traits are One-Hot encoded. Everything is packaged into a strict PyTorch Geometric `Data` object.
 4. **Validation (Decoding):** The tensors are decoded back into a physical structure to calculate the mathematical RMSD, proving that absolutely zero structural data was lost during the AI embedding process.
-
-*(For an extremely deep dive into the biophysics, tensor dimensionalities, and scalability trade-offs, please refer to the detailed `PDB_Pipeline_Documentation.md` file provided alongside this repository!)*
